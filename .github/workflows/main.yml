@@ -1,0 +1,60 @@
+name: Build and Publish
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  build:
+    name: Build on Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '7.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/global.json', '**/*.csproj', '**/*.sln') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: |
+          dotnet restore
+
+      - name: Build solution
+        run: |
+          # Build all solutions and projects found in the repository
+          if (Test-Path "*.sln") {
+            dotnet build "$(Get-ChildItem -Filter *.sln -Name | Select-Object -First 1)" --configuration Release --no-restore
+          } else {
+            dotnet build --configuration Release --no-restore
+          }
+
+      - name: Publish
+        run: |
+          # Publish the first project found (adjust if you need a specific project)
+          $proj = Get-ChildItem -Path . -Recurse -Include *.csproj | Select-Object -First 1
+          if ($proj) {
+            dotnet publish $proj.FullName -c Release -o ./publish --no-restore
+          } else {
+            Write-Error "No .csproj found to publish."
+          }
+        shell: pwsh
+
+      - name: Upload publish artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish
+          path: publish

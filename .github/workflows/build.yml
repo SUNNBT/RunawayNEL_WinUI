@@ -1,0 +1,57 @@
+name: Build and Publish
+
+on:
+  push:
+    branches: ["main", "master"]
+    tags: ["v*"]
+  pull_request:
+    branches: ["main", "master"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build on Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.slnx') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore EastSide.UI/Runaway.UI.csproj
+
+      - name: Build
+        run: dotnet build EastSide.UI/Runaway.UI.csproj --configuration Release --no-restore
+
+      - name: Publish (Self-contained win-x64)
+        run: dotnet publish EastSide.UI/Runaway.UI.csproj -c Release -r win-x64 --self-contained true -o ./publish_win-x64 --no-restore -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+
+      - name: Upload publish artifact (win-x64)
+        uses: actions/upload-artifact@v4
+        with:
+          name: RunawayNEL_win-x64
+          path: ./publish_win-x64
+
+      - name: Publish (Framework-dependent)
+        run: dotnet publish EastSide.UI/Runaway.UI.csproj -c Release -o ./publish_fdd --no-restore
+
+      - name: Upload publish artifact (FDD)
+        uses: actions/upload-artifact@v4
+        with:
+          name: RunawayNEL_fdd
+          path: ./publish_fdd
